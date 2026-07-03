@@ -85,7 +85,7 @@ install_brew_packages() {
   local pkgs=(
     zsh
     ripgrep fd eza ast-grep bat fzf zoxide git-delta
-    jq yq gh btop
+    jq yq gh btop zellij
     neovim fnm
     unzip wget
   )
@@ -107,6 +107,32 @@ install_brew_packages() {
     err "bun install failed via both paths"
     return 1
   fi
+}
+
+# ---------- Network tools ----------
+install_network_tools() {
+  log "Installing network tools"
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq curl ca-certificates mosh
+    ok "mosh-server installed"
+
+    if command -v tailscale >/dev/null 2>&1; then
+      ok "tailscale already installed"
+    else
+      log "Installing tailscale"
+      curl -fsSL https://tailscale.com/install.sh | sh
+      ok "tailscale installed"
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+      sudo systemctl enable --now tailscaled >/dev/null 2>&1 || \
+        warn "could not enable/start tailscaled; run 'sudo systemctl enable --now tailscaled' manually"
+    fi
+    return
+  fi
+
+  warn "apt-get not found; skipping tailscale and mosh-server install"
 }
 
 # ---------- oh-my-zsh ----------
@@ -155,6 +181,24 @@ install_zshrc() {
   fi
   cp "$src" "$target"
   ok ".zshrc written"
+}
+
+# ---------- Zellij config ----------
+install_zellij_config() {
+  log "Installing Zellij config"
+  local target="$HOME/.config/zellij/config.kdl"
+  local src="$SCRIPT_DIR/zellij/config.kdl"
+  if [ ! -f "$src" ]; then
+    err "Missing $src"; return 1
+  fi
+  mkdir -p "$(dirname "$target")"
+  if [ -f "$target" ] && ! diff -q "$src" "$target" >/dev/null 2>&1; then
+    local backup="$target.backup.$(date +%Y%m%d-%H%M%S)"
+    cp "$target" "$backup"
+    warn "backed up existing Zellij config -> $backup"
+  fi
+  cp "$src" "$target"
+  ok "Zellij config written"
 }
 
 # ---------- Node via fnm ----------
@@ -233,7 +277,10 @@ generate_ssh_key() {
 # ---------- Smoke test ----------
 smoke_test() {
   log "Smoke test"
-  local cmds=(zsh nvim bun rg fd eza bat fzf zoxide ast-grep delta jq yq gh btop fnm git)
+  local cmds=(zsh nvim bun rg fd eza bat fzf zoxide ast-grep delta jq yq gh btop fnm git zellij)
+  if command -v apt-get >/dev/null 2>&1; then
+    cmds+=(tailscale mosh-server)
+  fi
   local missing=0
   for c in "${cmds[@]}"; do
     if command -v "$c" >/dev/null 2>&1; then
@@ -256,9 +303,11 @@ main() {
   ensure_brew
   resolve_git_identity
   install_brew_packages
+  install_network_tools
   install_oh_my_zsh
   set_default_shell
   install_zshrc
+  install_zellij_config
   install_node
   install_nvim_config
   configure_git

@@ -41,6 +41,8 @@ alias cat='bat --paging=never'
 alias vim='nvim'
 alias vi='nvim'
 alias g='git'
+alias z='zellij'
+alias cc='claude'
 
 # ---------- Less / pager ----------
 export LESS='-FRX'
