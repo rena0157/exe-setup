@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install validators
+        run: sudo apt-get update && sudo apt-get install -y ruby shellcheck
+      - name: Shell syntax
+        run: bash -n setup.sh bootstrap.sh scripts/doctor.sh tests/test.sh
+      - name: ShellCheck
+        run: shellcheck setup.sh bootstrap.sh scripts/doctor.sh tests/test.sh
+      - name: Behavior and manifest tests
+        run: tests/test.sh
+      - name: Validate Brewfile syntax
+        run: ruby -c Brewfile

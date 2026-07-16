@@ -1,0 +1,7 @@
+# Local secrets and editor state
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+.DS_Store

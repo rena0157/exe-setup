@@ -1,320 +1,218 @@
 #!/usr/bin/env bash
-# exe-setup — bootstrap a fresh exe.dev / Ubuntu-like VM into a coding box.
-# Prerequisite: Homebrew already installed.
-# Idempotent: safe to re-run.
-
-set -euo pipefail
-
-# ---------- Pretty output ----------
-if [ -t 1 ]; then
-  RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'
-  BLUE=$'\033[34m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
-else
-  RED= GREEN= YELLOW= BLUE= BOLD= RESET=
-fi
-log()  { printf '%s\n' "${BLUE}${BOLD}==>${RESET} ${BOLD}$*${RESET}"; }
-ok()   { printf '%s\n' "  ${GREEN}OK${RESET} $*"; }
-warn() { printf '%s\n' "  ${YELLOW}!!${RESET} $*"; }
-err()  { printf '%s\n' "  ${RED}XX${RESET} $*" >&2; }
+# Idempotent Ubuntu development-machine setup. See README.md before running.
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DRY_RUN=0
+PROFILE=full
+CHANGE_SHELL=1
+WITH_AI=0
+NVIM_CONFIG_REPO="${NVIM_CONFIG_REPO-https://github.com/rena0157/lazy.nvim.git}"
+PI_NPM_PACKAGE="${PI_NPM_PACKAGE:-@earendil-works/pi-coding-agent}"
+MISE_NODE_VERSION="${MISE_NODE_VERSION:-24}"
+MISE_GO_VERSION="${MISE_GO_VERSION:-1.26}"
 
-# Git identity is resolved at runtime: env var > existing git config > interactive prompt.
-# Override either by exporting GIT_NAME / GIT_EMAIL before running.
-GIT_NAME="${GIT_NAME:-}"
-GIT_EMAIL="${GIT_EMAIL:-}"
-NVIM_CONFIG_REPO="${NVIM_CONFIG_REPO:-https://github.com/rena0157/lazy.nvim.git}"
+if [ -t 1 ]; then BLUE=$'\033[34m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'; BOLD=$'\033[1m'; RESET=$'\033[0m'; else BLUE=; GREEN=; YELLOW=; RED=; BOLD=; RESET=; fi
+log() { printf '%s\n' "${BLUE}${BOLD}==>${RESET} $*"; }
+ok() { printf '%s\n' "  ${GREEN}OK${RESET} $*"; }
+warn() { printf '%s\n' "  ${YELLOW}!!${RESET} $*"; }
+die() { printf '%s\n' "  ${RED}XX${RESET} $*" >&2; exit 1; }
+quote_cmd() { printf ' %q' "$@"; printf '\n'; }
+run() { if (( DRY_RUN )); then printf '  DRY-RUN:'; quote_cmd "$@"; else "$@"; fi; }
 
-resolve_git_identity() {
-  log "Resolving git identity"
-  if [ -z "$GIT_NAME" ]; then
-    GIT_NAME="$(git config --global user.name 2>/dev/null || true)"
-  fi
-  if [ -z "$GIT_EMAIL" ]; then
-    GIT_EMAIL="$(git config --global user.email 2>/dev/null || true)"
-  fi
-  if [ -z "$GIT_NAME" ]; then
-    read -r -p "  Git user.name:  " GIT_NAME
-  fi
-  if [ -z "$GIT_EMAIL" ]; then
-    read -r -p "  Git user.email: " GIT_EMAIL
-  fi
-  ok "$GIT_NAME <$GIT_EMAIL>"
+usage() {
+  cat <<'EOF'
+Usage: ./setup.sh [options]
+
+Options:
+  --profile full|core  full configures Docker/Tailscale and an SSH key (default: full)
+  --with-ai            install pi, Claude Code, and Codex CLIs (never Hermes)
+  --no-shell-change    do not change the login shell
+  --dry-run            print planned actions without changing the host
+  --check              run scripts/doctor.sh only
+  -h, --help           show this help
+
+Environment:
+  GIT_NAME, GIT_EMAIL  explicitly set/replace Git identity (otherwise preserve it)
+  NVIM_CONFIG_REPO     Neovim config URL; set to 'none' to use clean defaults
+  PI_NPM_PACKAGE       pi package used by --with-ai
+  MISE_NODE_VERSION    global Node version installed by mise (default: 24)
+  MISE_GO_VERSION      global Go version installed by mise (default: 1.26)
+EOF
 }
 
-# ---------- Homebrew ----------
-# Source brew into the current shell if it's installed in a known location.
-source_brew_if_present() {
-  command -v brew >/dev/null 2>&1 && return 0
-  for p in /home/linuxbrew/.linuxbrew/bin/brew /opt/homebrew/bin/brew /usr/local/bin/brew; do
-    if [ -x "$p" ]; then
-      eval "$("$p" shellenv)"
-      return 0
-    fi
+CHECK=0
+while (($#)); do
+  case "$1" in
+    --profile) (($# >= 2)) || die "--profile needs a value"; PROFILE=$2; shift 2 ;;
+    --with-ai) WITH_AI=1; shift ;;
+    --no-shell-change) CHANGE_SHELL=0; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --check) CHECK=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown option: $1 (see --help)" ;;
+  esac
+done
+[[ "$PROFILE" == full || "$PROFILE" == core ]] || die "profile must be 'full' or 'core'"
+if (( CHECK )); then exec "$SCRIPT_DIR/scripts/doctor.sh" --profile "$PROFILE"; fi
+if (( EUID == 0 )); then die "run setup as a regular user with sudo access, not as root"; fi
+
+source_brew() {
+  command -v brew >/dev/null 2>&1 && return
+  local brew
+  for brew in /home/linuxbrew/.linuxbrew/bin/brew /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [[ -x "$brew" ]]; then eval "$("$brew" shellenv)"; return; fi
   done
   return 1
 }
 
-ensure_brew() {
-  log "Ensuring Homebrew is installed"
-  if source_brew_if_present; then
-    ok "found: $(brew --version | head -1)"
-    return
-  fi
-
-  # apt-based deps (Debian/Ubuntu). Skip silently on other OSes (e.g. macOS).
-  if command -v apt-get >/dev/null 2>&1; then
-    log "Installing apt prerequisites"
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq build-essential procps curl file git ca-certificates
-  fi
-
-  log "Running Homebrew installer (non-interactive)"
-  NONINTERACTIVE=1 /bin/bash -c \
-    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-  if ! source_brew_if_present; then
-    err "Homebrew install completed but brew is still not on PATH"; exit 1
-  fi
-  ok "installed: $(brew --version | head -1)"
+install_apt() {
+  log "APT packages"
+  command -v apt-get >/dev/null 2>&1 || die "Ubuntu/Debian with apt-get is required"
+  mapfile -t packages < <(grep -Ev '^[[:space:]]*(#|$)' "$SCRIPT_DIR/apt-packages.txt")
+  (( DRY_RUN )) && { run sudo apt-get update; run sudo apt-get install -y "${packages[@]}"; return; }
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
 }
 
-# ---------- Brew packages ----------
-install_brew_packages() {
-  log "Installing brew packages"
-  local pkgs=(
-    zsh
-    ripgrep fd eza ast-grep bat fzf zoxide git-delta
-    jq yq gh btop zellij
-    neovim fnm
-    unzip wget
-  )
-  brew install "${pkgs[@]}"
-  ok "core packages installed"
-
-  if ! command -v bun >/dev/null 2>&1; then
-    log "Installing bun (oven-sh tap — no core formula on Linux)"
-    if ! brew install oven-sh/bun/bun; then
-      warn "tap install failed; falling back to bun.sh install script"
-      curl -fsSL https://bun.sh/install | bash
-      export BUN_INSTALL="$HOME/.bun"
-      export PATH="$BUN_INSTALL/bin:$PATH"
-    fi
-  fi
-  if command -v bun >/dev/null 2>&1; then
-    ok "bun $(bun --version)"
-  else
-    err "bun install failed via both paths"
-    return 1
-  fi
+install_brew() {
+  log "Homebrew"
+  if source_brew; then ok "$(brew --version | head -1)"; return; fi
+  if (( DRY_RUN )); then echo "  DRY-RUN: install Homebrew from its official installer"; return; fi
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  source_brew || die "Homebrew installed but could not be found"
 }
 
-# ---------- Network tools ----------
-install_network_tools() {
-  log "Installing network tools"
-  if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq curl ca-certificates mosh
-    ok "mosh-server installed"
-
-    if command -v tailscale >/dev/null 2>&1; then
-      ok "tailscale already installed"
-    else
-      log "Installing tailscale"
-      curl -fsSL https://tailscale.com/install.sh | sh
-      ok "tailscale installed"
-    fi
-
-    if command -v systemctl >/dev/null 2>&1; then
-      sudo systemctl enable --now tailscaled >/dev/null 2>&1 || \
-        warn "could not enable/start tailscaled; run 'sudo systemctl enable --now tailscaled' manually"
-    fi
-    return
-  fi
-
-  warn "apt-get not found; skipping tailscale and mosh-server install"
+install_brew_bundle() {
+  log "Homebrew bundle"
+  (( DRY_RUN )) && { run brew bundle --file "$SCRIPT_DIR/Brewfile"; return; }
+  brew bundle --file "$SCRIPT_DIR/Brewfile"
 }
 
-# ---------- oh-my-zsh ----------
-install_oh_my_zsh() {
-  log "Installing oh-my-zsh"
-  if [ -d "$HOME/.oh-my-zsh" ]; then
-    ok "already installed"
-    return
-  fi
-  git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
-  ok "cloned"
-}
-
-# ---------- Default shell ----------
-set_default_shell() {
-  log "Setting default shell to zsh"
-  local brew_zsh; brew_zsh="$(brew --prefix)/bin/zsh"
-  if [ ! -x "$brew_zsh" ]; then
-    err "zsh not found at $brew_zsh"; return 1
-  fi
-  if ! grep -qxF "$brew_zsh" /etc/shells; then
-    echo "$brew_zsh" | sudo tee -a /etc/shells >/dev/null
-    ok "added $brew_zsh to /etc/shells"
-  fi
-  local current; current="$(getent passwd "$USER" | awk -F: '{print $NF}')"
-  if [ "$current" != "$brew_zsh" ]; then
-    sudo chsh -s "$brew_zsh" "$USER"
-    ok "chsh -> $brew_zsh"
-  else
-    ok "already $brew_zsh"
-  fi
-}
-
-# ---------- .zshrc ----------
-install_zshrc() {
-  log "Installing .zshrc"
-  local target="$HOME/.zshrc"
-  local src="$SCRIPT_DIR/zshrc"
-  if [ ! -f "$src" ]; then
-    err "Missing $src"; return 1
-  fi
-  if [ -f "$target" ] && ! diff -q "$src" "$target" >/dev/null 2>&1; then
-    local backup="$target.backup.$(date +%Y%m%d-%H%M%S)"
-    cp "$target" "$backup"
-    warn "backed up existing .zshrc -> $backup"
-  fi
-  cp "$src" "$target"
-  ok ".zshrc written"
-}
-
-# ---------- Zellij config ----------
-install_zellij_config() {
-  log "Installing Zellij config"
-  local target="$HOME/.config/zellij/config.kdl"
-  local src="$SCRIPT_DIR/zellij/config.kdl"
-  if [ ! -f "$src" ]; then
-    err "Missing $src"; return 1
-  fi
+backup_and_link() {
+  local source=$1 target=$2
   mkdir -p "$(dirname "$target")"
-  if [ -f "$target" ] && ! diff -q "$src" "$target" >/dev/null 2>&1; then
-    local backup="$target.backup.$(date +%Y%m%d-%H%M%S)"
-    cp "$target" "$backup"
-    warn "backed up existing Zellij config -> $backup"
+  if [[ -L "$target" && "$(readlink -f "$target")" == "$(readlink -f "$source")" ]]; then ok "$target already linked"; return; fi
+  if [[ -e "$target" || -L "$target" ]]; then
+    local backup
+    backup="${target}.backup.$(date +%Y%m%d-%H%M%S)"
+    run mv "$target" "$backup"; warn "preserved existing file as $backup"
   fi
-  cp "$src" "$target"
-  ok "Zellij config written"
+  run ln -s "$source" "$target"
 }
 
-# ---------- Node via fnm ----------
-install_node() {
-  log "Installing Node LTS via fnm"
-  eval "$(fnm env --shell bash)"
-  # fnm install errors if already present; tolerate and continue.
-  fnm install --lts 2>&1 | grep -v "already installed" || true
-  fnm default  lts-latest >/dev/null 2>&1 || true
-  fnm use      lts-latest >/dev/null 2>&1 || true
-  if command -v node >/dev/null 2>&1; then
-    ok "node $(node --version) / npm $(npm --version)"
-  else
-    err "node not on PATH after fnm install"
-    return 1
+install_shell_tools() {
+  log "Shell tooling"
+  if [[ -d "$HOME/.oh-my-zsh" ]]; then ok "Oh My Zsh already installed"
+  else run git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git "$HOME/.oh-my-zsh"
   fi
 }
 
-# ---------- Neovim config ----------
-install_nvim_config() {
-  log "Installing Neovim config"
-  local target="$HOME/.config/nvim"
-  mkdir -p "$HOME/.config"
-  if [ -d "$target/.git" ]; then
-    ok "config already present at $target"
-  elif [ -d "$target" ]; then
-    warn "$target exists and is not a git repo — leaving alone. Move/remove it manually to re-clone."
-  else
-    git clone "$NVIM_CONFIG_REPO" "$target"
-    ok "cloned to $target"
+install_dotfiles() {
+  log "Dotfiles"
+  if (( DRY_RUN )); then
+    run ln -s "$SCRIPT_DIR/zshrc" "$HOME/.zshrc"
+    run ln -s "$SCRIPT_DIR/zprofile" "$HOME/.zprofile"
+    run ln -s "$SCRIPT_DIR/zellij/config.kdl" "$HOME/.config/zellij/config.kdl"
+    return
   fi
-  log "Syncing nvim plugins (headless, may take a minute)"
-  local attempt
-  for attempt in 1 2; do
-    if nvim --headless "+Lazy! sync" +qa; then
-      ok "plugins synced"
-      return
-    fi
-    warn "Lazy sync attempt $attempt failed"
-  done
-  warn "plugins not fully synced; run 'nvim +Lazy sync' manually"
+  backup_and_link "$SCRIPT_DIR/zshrc" "$HOME/.zshrc"
+  backup_and_link "$SCRIPT_DIR/zprofile" "$HOME/.zprofile"
+  backup_and_link "$SCRIPT_DIR/zellij/config.kdl" "$HOME/.config/zellij/config.kdl"
+  # Preserve the pre-existing validation behavior: reject an invalid managed config.
+  if command -v zellij >/dev/null 2>&1; then zellij setup --check >/dev/null || die "Zellij config failed validation"; fi
 }
 
-# ---------- Git config ----------
 configure_git() {
-  log "Configuring git"
-  git config --global user.name  "$GIT_NAME"
-  git config --global user.email "$GIT_EMAIL"
-  git config --global init.defaultBranch main
-  git config --global core.pager "delta"
-  git config --global interactive.diffFilter "delta --color-only"
-  git config --global delta.navigate true
-  git config --global delta.line-numbers true
-  git config --global delta.syntax-theme "Monokai Extended"
-  git config --global merge.conflictstyle "zdiff3"
-  git config --global pull.rebase true
-  git config --global push.autoSetupRemote true
-  ok "git identity: $GIT_NAME <$GIT_EMAIL>"
+  log "Git defaults and identity"
+  local key value
+  while IFS='=' read -r key value; do
+    [[ -n "$(git config --global --get "$key" 2>/dev/null || true)" ]] || run git config --global "$key" "$value"
+  done <<'EOF'
+init.defaultBranch=main
+core.pager=delta
+interactive.diffFilter=delta --color-only
+merge.conflictstyle=zdiff3
+pull.rebase=true
+push.autoSetupRemote=true
+delta.navigate=true
+delta.line-numbers=true
+delta.syntax-theme=Monokai Extended
+EOF
+  # Identity is never replaced implicitly. Supplying either variable is explicit consent for that field.
+  [[ -z "${GIT_NAME:-}" ]] || run git config --global user.name "$GIT_NAME"
+  [[ -z "${GIT_EMAIL:-}" ]] || run git config --global user.email "$GIT_EMAIL"
+  [[ -n "$(git config --global user.name 2>/dev/null || true)" ]] || warn "Git user.name unset; export GIT_NAME and rerun"
+  [[ -n "$(git config --global user.email 2>/dev/null || true)" ]] || warn "Git user.email unset; export GIT_EMAIL and rerun"
 }
 
-# ---------- SSH key ----------
-generate_ssh_key() {
-  log "Ensuring ed25519 SSH key"
-  mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
-  if [ -f "$HOME/.ssh/id_ed25519" ]; then
-    ok "key already exists"
-  else
-    ssh-keygen -t ed25519 -C "$GIT_EMAIL" -f "$HOME/.ssh/id_ed25519" -N "" -q
-    ok "generated"
+install_runtimes() {
+  log "Node LTS and Go via mise"
+  if (( DRY_RUN )); then run mise use --global "node@$MISE_NODE_VERSION" "go@$MISE_GO_VERSION"; else
+    eval "$(mise activate bash)"
+    mise use --global "node@$MISE_NODE_VERSION" "go@$MISE_GO_VERSION"
   fi
-  printf '\n%s\n' "${BOLD}GitHub public key (add at https://github.com/settings/keys):${RESET}"
-  cat "$HOME/.ssh/id_ed25519.pub"
-  echo
+  log "Python workflow via uv"
+  # uv is provided by Brewfile; Python versions/environments remain project-local.
+  run uv python install --default
+  export PATH="$HOME/.local/bin:$PATH"
 }
 
-# ---------- Smoke test ----------
-smoke_test() {
-  log "Smoke test"
-  local cmds=(zsh nvim bun rg fd eza bat fzf zoxide ast-grep delta jq yq gh btop fnm git zellij)
-  if command -v apt-get >/dev/null 2>&1; then
-    cmds+=(tailscale mosh-server)
+install_nvim_config() {
+  log "Neovim configuration"
+  local target="$HOME/.config/nvim"
+  if [[ -e "$target" ]]; then ok "leaving existing $target unchanged"
+  elif [[ -n "$NVIM_CONFIG_REPO" && "$NVIM_CONFIG_REPO" != none ]]; then run git clone "$NVIM_CONFIG_REPO" "$target"
+  else warn "Neovim will use its clean defaults"
   fi
-  local missing=0
-  for c in "${cmds[@]}"; do
-    if command -v "$c" >/dev/null 2>&1; then
-      ok "$c"
-    else
-      err "$c MISSING"; missing=$((missing+1))
-    fi
-  done
-  # node/npm need fnm env loaded
-  eval "$(fnm env --shell bash)" 2>/dev/null || true
-  for c in node npm; do
-    if command -v "$c" >/dev/null 2>&1; then ok "$c $($c --version)"; else err "$c MISSING"; missing=$((missing+1)); fi
-  done
-  if [ "$missing" -gt 0 ]; then
-    err "$missing tool(s) missing"; return 1
+}
+
+install_full_profile() {
+  log "Docker, Mosh, and Tailscale"
+  # Ubuntu's maintained docker.io package is installed from apt-packages.txt.
+  if (( DRY_RUN )); then
+    run sudo usermod -aG docker "$USER"
+    echo "  DRY-RUN: install Tailscale from its official installer"
+    return
   fi
+  sudo systemctl enable --now docker 2>/dev/null || warn "Docker service not started (systemd may be unavailable)"
+  if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then sudo usermod -aG docker "$USER"; warn "log out/in to activate Docker group membership"; fi
+  if ! command -v tailscale >/dev/null 2>&1; then curl -fsSL https://tailscale.com/install.sh | sh; fi
+  sudo systemctl enable --now tailscaled 2>/dev/null || warn "tailscaled not started; run: sudo systemctl enable --now tailscaled"
+  mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+  if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then ssh-keygen -q -t ed25519 -N '' -C "${GIT_EMAIL:-$USER@$(hostname)}" -f "$HOME/.ssh/id_ed25519"; fi
+}
+
+set_shell() {
+  (( CHANGE_SHELL )) || { warn "login shell change skipped"; return; }
+  local shell
+  if (( DRY_RUN )) && ! command -v brew >/dev/null 2>&1; then shell=/home/linuxbrew/.linuxbrew/bin/zsh; else shell="$(brew --prefix)/bin/zsh"; fi
+  if (( DRY_RUN )); then run sudo sh -c "grep -qxF '$shell' /etc/shells || echo '$shell' >> /etc/shells"; run chsh -s "$shell"; return; fi
+  grep -qxF "$shell" /etc/shells || echo "$shell" | sudo tee -a /etc/shells >/dev/null
+  [[ "$(getent passwd "$USER" | cut -d: -f7)" == "$shell" ]] || sudo chsh -s "$shell" "$USER"
+}
+
+install_ai() {
+  (( WITH_AI )) || return 0
+  log "Optional AI coding CLIs (pi, Claude Code, Codex; Hermes excluded)"
+  if (( DRY_RUN )); then run npm install -g "$PI_NPM_PACKAGE" @openai/codex; echo "  DRY-RUN: run the official Claude installer"; return; fi
+  eval "$(mise activate bash)"
+  npm install -g "$PI_NPM_PACKAGE" @openai/codex
+  command -v claude >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash
 }
 
 main() {
-  ensure_brew
-  resolve_git_identity
-  install_brew_packages
-  install_network_tools
-  install_oh_my_zsh
-  set_default_shell
-  install_zshrc
-  install_zellij_config
-  install_node
-  install_nvim_config
+  install_apt
+  install_brew
+  install_brew_bundle
+  install_shell_tools
+  install_dotfiles
   configure_git
-  generate_ssh_key
-  smoke_test
-  echo
-  printf '%s\n' "${GREEN}${BOLD}Setup complete.${RESET} Start a new shell or run: ${BOLD}exec zsh -l${RESET}"
+  install_runtimes
+  install_nvim_config
+  [[ "$PROFILE" == full ]] && install_full_profile
+  set_shell
+  install_ai
+  if (( DRY_RUN )); then ok "dry run complete; no changes made"; else "$SCRIPT_DIR/scripts/doctor.sh" --profile "$PROFILE" || warn "doctor found issues; follow its suggestions above"; fi
 }
-
-main "$@"
+main

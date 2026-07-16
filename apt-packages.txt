@@ -1,0 +1,14 @@
+# Ubuntu host packages (one package per line; comments and blank lines are ignored).
+build-essential
+ca-certificates
+curl
+docker-buildx
+docker-compose-v2
+docker.io
+file
+git
+gnupg
+mosh
+openssh-client
+procps
+software-properties-common
