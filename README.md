@@ -1,6 +1,6 @@
 # exe-setup
 
-A one-command, idempotent bootstrap for an Ubuntu development machine, tuned for [exe.dev](https://exe.dev) VMs built from the `boldsoftware/exeuntu` image. `setup.sh` is the orchestrator; `exe-new.sh` creates a VM and runs it on first boot; `bootstrap.sh` installs Git, obtains this repository, and hands off to `setup.sh` on any Ubuntu host. Homebrew's `Brewfile` is the source of truth for global CLI tools, `apt-packages.txt` contains host packages, and everything under `etc/` and `systemd/` is installed verbatim. **Hermes is explicitly excluded**: the agent machine and the development machine are deliberately separate.
+A one-command, idempotent bootstrap for an Ubuntu development machine, tuned for [exe.dev](https://exe.dev) VMs built from the `ghcr.io/boldsoftware/exeuntu` image. `setup.sh` is the orchestrator; `exe-new.sh` creates a VM and runs it on first boot; `bootstrap.sh` installs Git, obtains this repository, and hands off to `setup.sh` on any Ubuntu host. Homebrew's `Brewfile` is the source of truth for global CLI tools, `apt-packages.txt` contains host packages, and everything under `etc/` and `systemd/` is installed verbatim. **Hermes is explicitly excluded**: the agent machine and the development machine are deliberately separate.
 
 ## Create a new exe.dev dev machine
 

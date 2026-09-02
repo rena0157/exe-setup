@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 
 NAME=""; CPU=16; MEMORY=64GB; DISK=250GB; REF="main"; PROFILE=full; WITH_AI="--with-ai"; DRY_RUN=0
-IMAGE="${EXE_IMAGE:-boldsoftware/exeuntu}"
+IMAGE="${EXE_IMAGE:-ghcr.io/boldsoftware/exeuntu}"
 REPO_URL="${EXE_SETUP_REPO:-https://github.com/rena0157/exe-setup.git}"
 
 usage() { sed -n '2,3p' "$0" | sed 's/^# //'; }
