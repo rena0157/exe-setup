@@ -24,10 +24,14 @@ export TZ="${TZ:-America/Toronto}"
 
 # exe.dev's sshd hard-codes a 4096 open-file ceiling on every session and ignores PAM limits. With passwordless
 # sudo (exeuntu) we raise this shell's limit so bundlers, test runners, and Docker builds inherit it.
-if [[ -o interactive && "$(ulimit -Hn)" != unlimited && "$(ulimit -Hn)" -lt 65536 ]] && (( $+commands[prlimit] )); then
-  sudo -n prlimit --pid $$ --nofile=1048576:1048576 2>/dev/null
+# zsh's ulimit builtin caches limits at startup and would re-apply the stale ceiling, so only prlimit is used here.
+if [[ -o interactive ]] && (( $+commands[prlimit] )); then
+  _nofile_hard="$(prlimit --pid $$ --nofile -n -o HARD 2>/dev/null)"
+  if [[ -n "$_nofile_hard" && "$_nofile_hard" != unlimited && "$_nofile_hard" -lt 65536 ]]; then
+    sudo -n prlimit --pid $$ --nofile=1048576:1048576 2>/dev/null || prlimit --pid $$ --nofile="$_nofile_hard:$_nofile_hard" 2>/dev/null
+  fi
+  unset _nofile_hard
 fi
-[[ "$(ulimit -Hn)" == unlimited ]] || ulimit -Sn "$(ulimit -Hn)" 2>/dev/null
 
 # ---------- systemd user bus (needed for `systemctl --user` over SSH) ----------
 if [[ -z "$XDG_RUNTIME_DIR" && -d "/run/user/$UID" ]]; then
