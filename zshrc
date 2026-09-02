@@ -22,6 +22,10 @@ fi
 export COLORTERM=truecolor
 export TZ="${TZ:-America/Toronto}"
 
+# exe.dev's sshd does not apply PAM limits, so lift the soft open-file limit to the hard ceiling for
+# bundlers and test runners. Harmless elsewhere.
+if [[ "$(ulimit -Sn)" != unlimited && "$(ulimit -Hn)" != "$(ulimit -Sn)" ]]; then ulimit -Sn "$(ulimit -Hn)" 2>/dev/null; fi
+
 # ---------- systemd user bus (needed for `systemctl --user` over SSH) ----------
 if [[ -z "$XDG_RUNTIME_DIR" && -d "/run/user/$UID" ]]; then
   export XDG_RUNTIME_DIR="/run/user/$UID"
@@ -117,7 +121,7 @@ unset _zsh_hl
 
 # ---------- Auto-attach Zellij on interactive SSH logins ----------
 # Opt out for a session with ZELLIJ_AUTO_ATTACH=0, or permanently with: touch ~/.config/shell/no-zellij
-if [[ -o interactive && -n "$SSH_CONNECTION" && -z "$ZELLIJ" && "${ZELLIJ_AUTO_ATTACH:-1}" != 0 \
+if [[ -o interactive && -t 0 && -t 1 && -n "$SSH_CONNECTION" && -z "$ZELLIJ" && "${ZELLIJ_AUTO_ATTACH:-1}" != 0 \
       && ! -f "$HOME/.config/shell/no-zellij" && "$TERM_PROGRAM" != vscode && -z "$CURSOR_TRACE_ID" ]] \
    && (( $+commands[zellij] )); then
   zellij attach -c main

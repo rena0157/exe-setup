@@ -223,6 +223,11 @@ configure_system() {
   install_system_file "$SCRIPT_DIR/etc/security/limits.d/90-dev.conf" /etc/security/limits.d/90-dev.conf || true
   install_system_file "$SCRIPT_DIR/etc/systemd/system.conf.d/90-dev.conf" /etc/systemd/system.conf.d/90-dev.conf || true
   install_system_file "$SCRIPT_DIR/etc/systemd/user.conf.d/90-dev.conf" /etc/systemd/user.conf.d/90-dev.conf || true
+  if [[ -d /exe.dev ]]; then
+    install_system_file "$SCRIPT_DIR/etc/systemd/system/exe-sshd-limits.service" /etc/systemd/system/exe-sshd-limits.service && run sudo systemctl daemon-reload
+    run sudo systemctl enable --now exe-sshd-limits.service
+    run sudo systemctl restart exe-sshd-limits.service
+  fi
   if command -v timedatectl >/dev/null 2>&1; then
     local current_tz; current_tz="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
     if [[ "$current_tz" != "$TIMEZONE" ]]; then run sudo timedatectl set-timezone "$TIMEZONE"; else ok "timezone $TIMEZONE"; fi
@@ -238,9 +243,11 @@ configure_system() {
     if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then run sudo usermod -aG docker "$USER"; warn "log out/in to activate Docker group membership"; fi
   fi
   run sudo systemctl enable --now fstrim.timer
-  # Security updates apply themselves; feature upgrades stay manual.
+  # Security updates apply themselves; feature upgrades stay manual. The exeuntu image masks these units.
   install_system_file "$SCRIPT_DIR/etc/apt/apt.conf.d/20auto-upgrades" /etc/apt/apt.conf.d/20auto-upgrades || true
   if ! dpkg -s unattended-upgrades >/dev/null 2>&1; then run sudo DEBIAN_FRONTEND=noninteractive apt-get install -y unattended-upgrades; fi
+  run sudo systemctl unmask apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service unattended-upgrades.service
+  run sudo systemctl enable --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service
 }
 
 install_tailscale() {

@@ -26,7 +26,8 @@ grep -q 'ref=abc123' "$tmp/newout"
 
 # Every dotfile and system file that setup.sh links or installs must exist in the repo.
 for f in zshrc zprofile zsh/p10k.zsh zellij/config.kdl git/ignore etc/sysctl.d/90-dev.conf etc/security/limits.d/90-dev.conf \
-         etc/systemd/system.conf.d/90-dev.conf etc/systemd/user.conf.d/90-dev.conf etc/docker/daemon.json etc/apt/apt.conf.d/20auto-upgrades \
+         etc/systemd/system.conf.d/90-dev.conf etc/systemd/user.conf.d/90-dev.conf etc/systemd/system/exe-sshd-limits.service \
+         etc/docker/daemon.json etc/apt/apt.conf.d/20auto-upgrades \
          backup/backup.sh backup/excludes backup/restic-env.example \
          systemd/user/brew-upgrade.service systemd/user/brew-upgrade.timer systemd/user/docker-prune.service systemd/user/docker-prune.timer \
          systemd/user/backup.service systemd/user/backup.timer; do

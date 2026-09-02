@@ -1,0 +1,12 @@
+[Unit]
+Description=Raise open-file limits on the exe.dev sshd so interactive sessions inherit them (exe-setup)
+# exe.dev's sshd is launched by exe-init, not systemd, so DefaultLimitNOFILE and PAM limits never reach it.
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for i in $(seq 1 30); do pids="$(pgrep -x sshd || true)"; [ -n "$pids" ] && break; sleep 2; done; for p in $pids $(pgrep -f "exe-init guestd" || true); do prlimit --pid "$p" --nofile=1048576:1048576 || true; done'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
