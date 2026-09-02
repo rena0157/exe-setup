@@ -1,0 +1,11 @@
+# Copy to ~/.config/restic/env and chmod 600. Never commit the real file.
+# Backblaze B2 example (any restic backend works: s3:, sftp:, rclone:, local path).
+export B2_ACCOUNT_ID="000000000000000"
+export B2_ACCOUNT_KEY="replace-me"
+export RESTIC_REPOSITORY="b2:my-bucket:ardev"
+# Prefer a password file over an inline password so the secret never appears in process listings.
+export RESTIC_PASSWORD_FILE="$HOME/.config/restic/password"
+# Optional: additional absolute paths, space separated.
+# export BACKUP_EXTRA_PATHS="$HOME/notes"
+# Optional: healthchecks.io style ping on success.
+# export BACKUP_PING_URL="https://hc-ping.com/your-uuid"

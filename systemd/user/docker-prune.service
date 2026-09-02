@@ -1,0 +1,11 @@
+[Unit]
+Description=Reclaim Docker disk space without touching named volumes (exe-setup)
+
+[Service]
+Type=oneshot
+# Stopped containers, dangling images, unused networks, and build cache older than a week.
+# Named volumes are deliberately kept: they usually hold local databases.
+ExecStart=/usr/bin/docker system prune -f --filter until=168h
+ExecStart=/usr/bin/docker builder prune -f --keep-storage 20GB
+Nice=10
+IOSchedulingClass=idle

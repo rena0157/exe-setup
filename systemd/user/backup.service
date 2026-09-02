@@ -1,0 +1,9 @@
+[Unit]
+Description=Restic backup of the home directory (exe-setup)
+ConditionPathExists=%h/.config/restic/env
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/exe-backup
+Nice=10
+IOSchedulingClass=idle

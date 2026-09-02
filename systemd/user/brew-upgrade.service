@@ -1,0 +1,10 @@
+[Unit]
+Description=Upgrade Homebrew packages (exe-setup)
+
+[Service]
+Type=oneshot
+Environment=HOMEBREW_NO_ANALYTICS=1
+Environment=HOMEBREW_NO_ENV_HINTS=1
+ExecStart=/bin/bash -lc 'brew update && brew upgrade && brew cleanup --prune=14'
+Nice=10
+IOSchedulingClass=idle

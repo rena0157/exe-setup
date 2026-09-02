@@ -1,0 +1,14 @@
+# Global gitignore (linked to ~/.config/git/ignore by exe-setup). Project-specific rules belong in the repo.
+.DS_Store
+.direnv/
+.envrc.local
+.env.local
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.zed/
+.claude/settings.local.json
+.mise.local.toml

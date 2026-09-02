@@ -1,78 +1,79 @@
 # exe-setup
 
-A one-command, idempotent bootstrap for an Ubuntu development machine. `setup.sh` is the orchestrator; `bootstrap.sh` only installs Git, obtains this repository, and hands off to it. Homebrew's `Brewfile` is the source of truth for global CLI tools, while `apt-packages.txt` contains host packages. **Hermes is explicitly excluded.** Machine-specific rclone configuration and backups are also excluded.
+A one-command, idempotent bootstrap for an Ubuntu development machine, tuned for [exe.dev](https://exe.dev) VMs built from the `ghcr.io/boldsoftware/exeuntu` image. `setup.sh` is the orchestrator; `exe-new.sh` creates a VM and runs it on first boot; `bootstrap.sh` installs Git, obtains this repository, and hands off to `setup.sh` on any Ubuntu host. Homebrew's `Brewfile` is the source of truth for global CLI tools, `apt-packages.txt` contains host packages, and everything under `etc/` and `systemd/` is installed verbatim. **Hermes is explicitly excluded**: the agent machine and the development machine are deliberately separate.
 
-## Run it
+## Create a new exe.dev dev machine
 
-Review the repository, then clone and run:
+```bash
+git clone https://github.com/rena0157/exe-setup.git ~/src/exe-setup
+cd ~/src/exe-setup
+./exe-new.sh ardev                       # 16 vCPU, 64 GB, 250 GB, exeuntu, full profile with AI CLIs
+./exe-new.sh scratch --cpu 4 --memory 8GB --disk 40GB --core --no-ai
+```
+
+`exe-new.sh` pipes a small first-boot script to `ssh exe.dev new --setup-script`. On first boot the VM clones this repository at `--ref` (default `main`; pin a commit SHA for reproducibility) and runs `setup.sh`, logging to `~/exe-setup-firstboot.log`. Use `--dry-run` to print the exact command and script without creating anything.
+
+The image matters. exeuntu boots systemd, logs you in as `exedev` with passwordless sudo, and ships Docker and Tailscale. A raw OCI image such as `ubuntu:26.04` boots exe.dev's `exe-init` instead: no systemd, root login only, and Docker, Tailscale, mosh, and the timers below cannot run. `doctor.sh` fails loudly on such a host.
+
+## Run it on an existing host
 
 ```bash
 git clone https://github.com/rena0157/exe-setup.git ~/.local/share/exe-setup
 cd ~/.local/share/exe-setup
-./setup.sh
+./setup.sh --with-ai
 ```
 
-On a blank Ubuntu host, the small bootstrap can clone and run everything:
+Or, on a blank Ubuntu host without this repository:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rena0157/exe-setup/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/rena0157/exe-setup/main/bootstrap.sh | bash -s -- --with-ai
 ```
 
-Arguments can be passed through stdin scripts, for example:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/rena0157/exe-setup/main/bootstrap.sh \
-  | bash -s -- --profile core --no-shell-change
-```
-
-**Security:** `curl | bash` executes mutable remote code without review. Prefer cloning and inspecting it. For automation, download the script, verify it, and set `EXE_SETUP_REF` to a reviewed commit SHA. The bootstrap repository URL/destination can be changed with `EXE_SETUP_REPO` and `EXE_SETUP_DIR`.
+**Security:** `curl | bash` executes mutable remote code without review. Prefer cloning and inspecting it. For automation, set `EXE_SETUP_REF` to a reviewed commit SHA.
 
 ## Options
 
 ```text
---profile full|core  core skips configuration of Docker/Tailscale and SSH key creation
---with-ai            opt in to pi, Claude Code, and Codex (never Hermes)
+--profile full|core  core skips Docker/Tailscale, system tuning, timers, and SSH key creation
+--with-ai            opt in to pi, Claude Code, Codex, and OpenCode (never Hermes)
 --no-shell-change    leave the current login shell unchanged
 --dry-run            print actions without changing the machine
 --check              run the read-only doctor
 --help               show command help
 ```
 
-`full` is the default. The Ubuntu package manifest includes Docker and Mosh for a consistent host baseline; the core profile does not enable Docker, install Tailscale, alter Docker group membership, or generate an SSH key. Runtime and optional AI package versions can be overridden with `MISE_NODE_VERSION`, `MISE_GO_VERSION`, and `PI_NPM_PACKAGE`.
+Environment overrides: `GIT_NAME`, `GIT_EMAIL`, `NVIM_CONFIG_REPO`, `PI_NPM_PACKAGE`, `MISE_NODE_VERSION` (24), `MISE_GO_VERSION` (1.26), `TIMEZONE` (America/Toronto).
 
-## Installed architecture
+## What you get
 
-- Ubuntu packages from `apt-packages.txt`: build prerequisites, Git, Docker Engine with Compose/Buildx, Mosh, SSH client, and utilities.
-- Global CLI packages from `Brewfile`: zsh, GitHub CLI, Neovim, Zellij, Bun, mise, uv, ripgrep, fd, eza, fzf, bat, zoxide, delta, jq/yq, and diagnostics/formatters.
-- Node 24 and Go 1.26 are managed by **mise** by default. Override them with `MISE_NODE_VERSION` and `MISE_GO_VERSION`; project-local mise files take precedence.
-- **uv** supplies Python and is the recommended interface for Python versions, virtual environments, tools, and dependencies.
-- Tailscale uses its official Ubuntu installer because it is a system service. Docker uses Ubuntu's `docker.io` package.
-- Oh My Zsh is installed without invoking its interactive installer.
-- AI coding CLIs are opt-in with `--with-ai`: the configured pi package and Codex use npm; Claude uses its official installer. `PI_NPM_PACKAGE` defaults to `@earendil-works/pi-coding-agent` and can be overridden.
+- **Packages.** Ubuntu packages from `apt-packages.txt` (build tools, Docker Engine with Compose and Buildx, mosh, rsync, network utilities). Global CLIs from `Brewfile`: zsh, gh, git-delta, git-lfs, lazygit, Neovim, Zellij, mise, uv, Bun, ripgrep, fd, eza, bat, fzf, zoxide, atuin, direnv, ast-grep, jq, yq, ncdu, btop, mkcert, cloudflared, restic, shellcheck, shfmt.
+- **Shell.** Oh My Zsh with powerlevel10k (`zsh/p10k.zsh`), autosuggestions, syntax highlighting, fzf keybindings, zoxide as `cd`, atuin history, direnv, and the `ls`/`cat`/`g`/`lg`/`dc` aliases. Interactive SSH logins auto-attach to a Zellij session named `main`; opt out per session with `ZELLIJ_AUTO_ATTACH=0` or permanently with `touch ~/.config/shell/no-zellij`.
+- **Runtimes.** Node 24 and Go 1.26 via mise (project `.mise.toml` files override the globals), Bun via Homebrew, Python via uv.
+- **Editor.** Neovim with the config from `https://github.com/rena0157/lazy.nvim` on a blank machine. An existing `~/.config/nvim` is never touched. Set `NVIM_CONFIG_REPO=none` for stock Neovim.
+- **Git.** Sensible defaults filled only when absent (delta pager, zdiff3, rebase on pull, autoSetupRemote, rerere, histogram diff), `gh` as the GitHub credential helper, and a global ignore at `~/.config/git/ignore`.
+- **System tuning (full profile).** `etc/sysctl.d/90-dev.conf` raises inotify watches and mmap limits for file watchers; `etc/security/limits.d` and systemd drop-ins raise the open-file ceiling; Docker gets log rotation, BuildKit, and a private address pool; the timezone is set; `fstrim.timer` and unattended security upgrades are enabled.
+- **Maintenance timers (full profile).** User-level systemd timers, enabled with lingering so they run while you are logged out: `brew-upgrade` weekly, `docker-prune` weekly (never touches named volumes), and `backup` nightly when restic is configured.
+- **Backups.** `backup/backup.sh` snapshots `~/src`, `~/.config`, `~/.ssh`, agent settings, and the installed system files to any restic repository, keeps 7 daily / 4 weekly / 6 monthly, and verifies a rotating slice of the repo. Configure it by copying `backup/restic-env.example` to `~/.config/restic/env` (mode 0600) and rerunning setup. Check with `systemctl --user list-timers` and `journalctl --user -u backup`.
+- **Tailscale.** Installed and enabled; `tailscale up` remains a manual, authenticated step. mosh only works over the tailnet IP because exe.dev's SSH is proxied.
 
 ## Configuration and safety
 
-The repository symlinks `zshrc`, `zprofile`, and `zellij/config.kdl` into the home directory. A different existing file is moved to a timestamped backup first; a correct symlink is left alone. Both login and interactive shells initialize Homebrew and user paths, and mise is activated in interactive zsh.
+The repository symlinks `zshrc`, `zprofile`, `zsh/p10k.zsh`, `zellij/config.kdl`, and `git/ignore` into the home directory. A different existing file is moved to a timestamped backup first; a correct symlink is left alone. Machine-local secrets live in `~/.config/shell/env` (mode 0600, enforced by `doctor.sh`); non-secret local overrides go in `~/.zshrc.local`. Re-running setup is safe: package managers converge state, system files are compared before being rewritten, services and group membership are checked, and SSH keys are only created when absent.
 
-Neovim itself is installed, but an existing `~/.config/nvim` is never touched. A blank machine clones `https://github.com/rena0157/lazy.nvim.git` by default. Override `NVIM_CONFIG_REPO` with another public, secret-free Git URL, or set it to `none` to use clean Neovim defaults.
-
-Git's safe defaults are filled only when absent. Existing `user.name` and `user.email` are preserved. Identity fields are changed only when explicitly supplied:
-
-```bash
-GIT_NAME='Ada Lovelace' GIT_EMAIL='ada@example.com' ./setup.sh
-```
-
-The repository contains no credentials. Do not add tokens, private keys, `.env` files, rclone remotes, or backup destinations. Machine-local environment variables may live in `~/.config/shell/env`; the managed zsh configuration sources it when present, and `doctor.sh` enforces mode `0600`. Re-running setup is safe: package managers converge state, existing configs are detected, services and group membership are checked, and SSH keys are only created when absent.
+The repository contains no credentials. Do not add tokens, private keys, `.env` files, restic passwords, or backup destinations.
 
 ## Authentication checklist
 
-Run setup as a regular user with passwordless or interactive `sudo` access, not as root. Setup deliberately does not automate account credentials. After installation:
+Run setup as a regular user with sudo access, not as root. After the first run:
 
-1. Review the generated/existing public key and add it to GitHub; run `gh auth login`.
-2. Run `tailscale up` for the intended tailnet (full profile).
-3. Log out/in if setup added you to the `docker` group; validate with `docker run --rm hello-world`.
-4. Authenticate optional AI CLIs individually. Never store their tokens in this repository.
-5. Configure project secrets in an appropriate secret manager.
+1. `gh auth login` (git then authenticates through gh automatically).
+2. `sudo tailscale up --ssh`, then disable key expiry for the node in the Tailscale admin console.
+3. `atuin login` (or `atuin register`) if you want history synced across machines.
+4. Copy `backup/restic-env.example` to `~/.config/restic/env`, `chmod 600` it, write the repo password to `~/.config/restic/password`, and rerun `./setup.sh` to enable the nightly timer.
+5. Log out/in once so the `docker` group applies; validate with `docker run --rm hello-world`.
+6. Authenticate optional AI CLIs individually. Never store their tokens in this repository.
+
+On the Mac side, add the VM to `~/.ssh/config` with its tailnet name so `mosh <name>` works, and keep the exe.dev HTTPS proxy private: `https://<name>.exe.xyz` serves port 8000 and ports 3000-9999 are forwarded behind exe.dev login.
 
 ## Validation and development
 
@@ -80,8 +81,7 @@ Run setup as a regular user with passwordless or interactive `sudo` access, not 
 ./setup.sh --check                 # actionable host diagnostics
 ./scripts/doctor.sh --profile core
 ./tests/test.sh                    # pure behavior/manifest checks
-bash -n setup.sh bootstrap.sh scripts/doctor.sh tests/test.sh
-shellcheck setup.sh bootstrap.sh scripts/doctor.sh tests/test.sh
+shellcheck setup.sh bootstrap.sh exe-new.sh scripts/doctor.sh backup/backup.sh tests/test.sh
 ```
 
-CI runs syntax checks, ShellCheck, tests, and manifest syntax validation on Ubuntu 24.04. It intentionally uses `--dry-run` rather than mutating the CI host.
+CI runs syntax checks, ShellCheck, the tests, Brewfile syntax validation, and systemd unit verification on Ubuntu 24.04. It uses `--dry-run` rather than mutating the CI host.

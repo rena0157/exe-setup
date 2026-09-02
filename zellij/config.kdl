@@ -306,10 +306,132 @@ web_client {
 // 
 // osc8_hyperlinks true
  
+// Claude Code palette, mirrored from ~/src/pi-config/themes/claude-code.json.
+themes {
+    claude-code {
+        text_unselected {
+            base 232 227 220
+            background 24 23 22
+            emphasis_0 217 119 87
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        text_selected {
+            base 232 227 220
+            background 64 54 48
+            emphasis_0 239 159 118
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        ribbon_selected {
+            base 24 23 22
+            background 217 119 87
+            emphasis_0 224 108 117
+            emphasis_1 216 166 87
+            emphasis_2 180 154 214
+            emphasis_3 120 169 196
+        }
+        ribbon_unselected {
+            base 184 177 168
+            background 43 41 38
+            emphasis_0 224 108 117
+            emphasis_1 232 227 220
+            emphasis_2 120 169 196
+            emphasis_3 180 154 214
+        }
+        table_title {
+            base 217 119 87
+            background 0
+            emphasis_0 229 167 111
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        table_cell_selected {
+            base 232 227 220
+            background 64 54 48
+            emphasis_0 239 159 118
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        table_cell_unselected {
+            base 184 177 168
+            background 24 23 22
+            emphasis_0 217 119 87
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        list_selected {
+            base 232 227 220
+            background 64 54 48
+            emphasis_0 239 159 118
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        list_unselected {
+            base 184 177 168
+            background 24 23 22
+            emphasis_0 217 119 87
+            emphasis_1 120 169 196
+            emphasis_2 143 190 109
+            emphasis_3 180 154 214
+        }
+        frame_selected {
+            base 217 119 87
+            background 0
+            emphasis_0 239 159 118
+            emphasis_1 120 169 196
+            emphasis_2 180 154 214
+            emphasis_3 0
+        }
+        frame_highlight {
+            base 239 159 118
+            background 0
+            emphasis_0 180 154 214
+            emphasis_1 217 119 87
+            emphasis_2 216 166 87
+            emphasis_3 239 159 118
+        }
+        exit_code_success {
+            base 143 190 109
+            background 0
+            emphasis_0 120 169 196
+            emphasis_1 24 23 22
+            emphasis_2 180 154 214
+            emphasis_3 217 119 87
+        }
+        exit_code_error {
+            base 224 108 117
+            background 0
+            emphasis_0 216 166 87
+            emphasis_1 0
+            emphasis_2 0
+            emphasis_3 0
+        }
+        multiplayer_user_colors {
+            player_1 180 154 214
+            player_2 120 169 196
+            player_3 217 119 87
+            player_4 216 166 87
+            player_5 143 190 109
+            player_6 239 159 118
+            player_7 224 108 117
+            player_8 184 177 168
+            player_9 125 118 110
+            player_10 74 70 65
+        }
+    }
+}
+
 // Choose the theme that is specified in the themes section.
 // Default: default
 //
-theme "catppuccin-mocha"
+theme "claude-code"
  
 // Theme to use when the host terminal reports a dark color palette.
 // Requires `theme_light` to also be set; otherwise `theme` is used.
