@@ -328,10 +328,15 @@ install_t3() {
     else warn "T3 Code service update failed; run: npx t3@$T3_NPM_TAG service update"
     fi
   else
-    if npx -y "t3@$T3_NPM_TAG" service install; then ok "T3 Code service installed"
-    else warn "T3 Code service install failed; run: npx t3@$T3_NPM_TAG service install"
+    # The installer writes the unit first and then tries `loginctl enable-linger` itself, which fails without
+    # polkit in a non-interactive session. Lingering is already on (install_user_services), so finish the job here.
+    if npx -y "t3@$T3_NPM_TAG" service install >/dev/null 2>&1; then ok "T3 Code service installed"
+    elif [[ -f "$HOME/.config/systemd/user/t3code.service" ]]; then warn "T3 Code installer could not enable lingering itself; enabling the unit directly"
+    else warn "T3 Code service install failed; run: npx t3@$T3_NPM_TAG service install"; return
     fi
   fi
+  systemctl --user daemon-reload
+  systemctl --user enable --now t3code.service >/dev/null 2>&1 || warn "t3code.service did not start; see ~/.t3/userdata/logs/boot-service.log"
 }
 
 main() {
