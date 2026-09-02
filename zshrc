@@ -26,7 +26,7 @@ export TZ="${TZ:-America/Toronto}"
 # sudo (exeuntu) we raise this shell's limit so bundlers, test runners, and Docker builds inherit it.
 # zsh's ulimit builtin caches limits at startup and would re-apply the stale ceiling, so only prlimit is used here.
 if [[ -o interactive ]] && (( $+commands[prlimit] )); then
-  _nofile_hard="$(prlimit --pid $$ --nofile -n -o HARD 2>/dev/null)"
+  _nofile_hard="$(awk '/Max open files/ {print $5}' /proc/$$/limits 2>/dev/null)"
   if [[ -n "$_nofile_hard" && "$_nofile_hard" != unlimited && "$_nofile_hard" -lt 65536 ]]; then
     sudo -n prlimit --pid $$ --nofile=1048576:1048576 2>/dev/null || prlimit --pid $$ --nofile="$_nofile_hard:$_nofile_hard" 2>/dev/null
   fi
