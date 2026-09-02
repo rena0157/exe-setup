@@ -34,7 +34,11 @@ echo "=== exe-setup first boot \$(date -Is) ref=$REF profile=$PROFILE"
 sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates git
 DEST="\$HOME/.local/share/exe-setup"
 if [ ! -d "\$DEST/.git" ]; then git clone "$REPO_URL" "\$DEST"; fi
-git -C "\$DEST" fetch --tags origin "$REF" && git -C "\$DEST" checkout --detach FETCH_HEAD
+# Branches, tags, and full commit SHAs can be fetched directly; abbreviated SHAs cannot.
+if ! git -C "\$DEST" fetch --tags origin "$REF"; then
+  echo "could not fetch ref $REF; refusing to run an unpinned setup"; exit 1
+fi
+git -C "\$DEST" checkout --detach FETCH_HEAD
 mkdir -p "\$HOME/src"
 "\$DEST/setup.sh" --profile "$PROFILE" $WITH_AI || echo "setup.sh exited \$?"
 echo "=== first boot finished \$(date -Is)"

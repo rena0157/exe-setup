@@ -101,6 +101,16 @@ install_brew() {
 
 install_brew_bundle() {
   log "Homebrew bundle"
+  # Recent Homebrew refuses formulae from third-party taps until they are explicitly trusted.
+  local tap
+  while read -r tap; do
+    [[ -n "$tap" ]] || continue
+    if (( DRY_RUN )); then run brew trust "$tap"
+    elif brew trust --help >/dev/null 2>&1; then
+      brew tap "$tap" >/dev/null 2>&1 || true
+      brew trust "$tap" >/dev/null 2>&1 || warn "could not trust tap $tap"
+    fi
+  done < <(awk -F'"' '/^tap "/ {print $2}' "$SCRIPT_DIR/Brewfile")
   (( DRY_RUN )) && { run brew bundle --file "$SCRIPT_DIR/Brewfile"; return; }
   brew bundle --file "$SCRIPT_DIR/Brewfile"
 }
