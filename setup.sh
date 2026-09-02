@@ -223,11 +223,6 @@ configure_system() {
   install_system_file "$SCRIPT_DIR/etc/security/limits.d/90-dev.conf" /etc/security/limits.d/90-dev.conf || true
   install_system_file "$SCRIPT_DIR/etc/systemd/system.conf.d/90-dev.conf" /etc/systemd/system.conf.d/90-dev.conf || true
   install_system_file "$SCRIPT_DIR/etc/systemd/user.conf.d/90-dev.conf" /etc/systemd/user.conf.d/90-dev.conf || true
-  if [[ -d /exe.dev ]]; then
-    install_system_file "$SCRIPT_DIR/etc/systemd/system/exe-sshd-limits.service" /etc/systemd/system/exe-sshd-limits.service && run sudo systemctl daemon-reload
-    run sudo systemctl enable --now exe-sshd-limits.service
-    run sudo systemctl restart exe-sshd-limits.service
-  fi
   if command -v timedatectl >/dev/null 2>&1; then
     local current_tz; current_tz="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
     if [[ "$current_tz" != "$TIMEZONE" ]]; then run sudo timedatectl set-timezone "$TIMEZONE"; else ok "timezone $TIMEZONE"; fi

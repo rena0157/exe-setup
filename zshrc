@@ -22,9 +22,12 @@ fi
 export COLORTERM=truecolor
 export TZ="${TZ:-America/Toronto}"
 
-# exe.dev's sshd does not apply PAM limits, so lift the soft open-file limit to the hard ceiling for
-# bundlers and test runners. Harmless elsewhere.
-if [[ "$(ulimit -Sn)" != unlimited && "$(ulimit -Hn)" != "$(ulimit -Sn)" ]]; then ulimit -Sn "$(ulimit -Hn)" 2>/dev/null; fi
+# exe.dev's sshd hard-codes a 4096 open-file ceiling on every session and ignores PAM limits. With passwordless
+# sudo (exeuntu) we raise this shell's limit so bundlers, test runners, and Docker builds inherit it.
+if [[ -o interactive && "$(ulimit -Hn)" != unlimited && "$(ulimit -Hn)" -lt 65536 ]] && (( $+commands[prlimit] )); then
+  sudo -n prlimit --pid $$ --nofile=1048576:1048576 2>/dev/null
+fi
+[[ "$(ulimit -Hn)" == unlimited ]] || ulimit -Sn "$(ulimit -Hn)" 2>/dev/null
 
 # ---------- systemd user bus (needed for `systemctl --user` over SSH) ----------
 if [[ -z "$XDG_RUNTIME_DIR" && -d "/run/user/$UID" ]]; then
