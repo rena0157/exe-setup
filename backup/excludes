@@ -1,0 +1,25 @@
+# Paths skipped by restic. Anything reproducible from a package manager or a build is excluded.
+**/node_modules
+**/.venv
+**/venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.next
+**/.nuxt
+**/.output
+**/.turbo
+**/dist
+**/build
+**/target
+**/.cache
+**/.direnv
+**/.mise
+**/*.log
+**/.git/objects/pack/tmp_*
+**/.claude/projects/*/tool-results
+**/.claude/debug
+**/.claude/file-history
+**/.codex/log
+/home/*/.local/share/Trash

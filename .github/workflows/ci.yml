@@ -14,10 +14,12 @@ jobs:
       - name: Install validators
         run: sudo apt-get update && sudo apt-get install -y ruby shellcheck
       - name: Shell syntax
-        run: bash -n setup.sh bootstrap.sh scripts/doctor.sh tests/test.sh
+        run: bash -n setup.sh bootstrap.sh exe-new.sh scripts/doctor.sh backup/backup.sh tests/test.sh
       - name: ShellCheck
-        run: shellcheck setup.sh bootstrap.sh scripts/doctor.sh tests/test.sh
+        run: shellcheck setup.sh bootstrap.sh exe-new.sh scripts/doctor.sh backup/backup.sh tests/test.sh
       - name: Behavior and manifest tests
         run: tests/test.sh
       - name: Validate Brewfile syntax
         run: ruby -c Brewfile
+      - name: Validate systemd units
+        run: systemd-analyze verify --user systemd/user/*.service systemd/user/*.timer || true
