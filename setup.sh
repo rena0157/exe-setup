@@ -335,8 +335,13 @@ install_t3() {
     else warn "T3 Code service install failed; run: npx t3@$T3_NPM_TAG service install"; return
     fi
   fi
+  # The generated unit inherits systemd's minimal PATH and cannot find Homebrew's cloudflared (T3 Connect relay
+  # client) or the AI CLIs. A drop-in fixes PATH and survives `t3 service update` rewriting the unit.
+  install -D -m 0644 "$SCRIPT_DIR/systemd/user/t3code.service.d/10-exe-setup-path.conf" \
+    "$HOME/.config/systemd/user/t3code.service.d/10-exe-setup-path.conf"
   systemctl --user daemon-reload
-  systemctl --user enable --now t3code.service >/dev/null 2>&1 || warn "t3code.service did not start; see ~/.t3/userdata/logs/boot-service.log"
+  systemctl --user enable t3code.service >/dev/null 2>&1 || true
+  systemctl --user restart t3code.service >/dev/null 2>&1 || warn "t3code.service did not start; see ~/.t3/userdata/logs/boot-service.log"
 }
 
 main() {

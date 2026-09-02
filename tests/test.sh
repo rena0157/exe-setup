@@ -29,7 +29,7 @@ for f in zshrc zprofile zsh/p10k.zsh zellij/config.kdl git/ignore etc/sysctl.d/9
          etc/systemd/system.conf.d/90-dev.conf etc/systemd/user.conf.d/90-dev.conf etc/docker/daemon.json etc/apt/apt.conf.d/20auto-upgrades \
          backup/backup.sh backup/excludes backup/restic-env.example \
          systemd/user/brew-upgrade.service systemd/user/brew-upgrade.timer systemd/user/docker-prune.service systemd/user/docker-prune.timer \
-         systemd/user/backup.service systemd/user/backup.timer; do
+         systemd/user/backup.service systemd/user/backup.timer systemd/user/t3code.service.d/10-exe-setup-path.conf; do
   [[ -f "$ROOT/$f" ]] || { echo "missing $f" >&2; exit 1; }
 done
 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$ROOT/etc/docker/daemon.json"
