@@ -9,6 +9,7 @@ CHANGE_SHELL=1
 WITH_AI=0
 NVIM_CONFIG_REPO="${NVIM_CONFIG_REPO-https://github.com/rena0157/lazy.nvim.git}"
 PI_NPM_PACKAGE="${PI_NPM_PACKAGE:-@earendil-works/pi-coding-agent}"
+T3_NPM_TAG="${T3_NPM_TAG:-nightly}"
 MISE_NODE_VERSION="${MISE_NODE_VERSION:-24}"
 MISE_GO_VERSION="${MISE_GO_VERSION:-1.26}"
 TIMEZONE="${TIMEZONE:-America/Toronto}"
@@ -27,7 +28,7 @@ Usage: ./setup.sh [options]
 
 Options:
   --profile full|core  full configures Docker/Tailscale, system tuning, timers, and an SSH key (default: full)
-  --with-ai            install pi, Claude Code, Codex, and OpenCode CLIs (never Hermes)
+  --with-ai            install pi, Claude Code, Codex, OpenCode, and the T3 Code service (never Hermes)
   --no-shell-change    do not change the login shell
   --dry-run            print planned actions without changing the host
   --check              run scripts/doctor.sh only
@@ -37,6 +38,7 @@ Environment:
   GIT_NAME, GIT_EMAIL  explicitly set/replace Git identity (otherwise preserve it)
   NVIM_CONFIG_REPO     Neovim config URL; set to 'none' to use clean defaults
   PI_NPM_PACKAGE       pi package used by --with-ai
+  T3_NPM_TAG           npm dist-tag for T3 Code used by --with-ai (default: nightly)
   MISE_NODE_VERSION    global Node version installed by mise (default: 24)
   MISE_GO_VERSION      global Go version installed by mise (default: 1.26)
   TIMEZONE             system timezone for the full profile (default: America/Toronto)
@@ -304,12 +306,32 @@ set_shell() {
 
 install_ai() {
   (( WITH_AI )) || return 0
-  log "Optional AI coding CLIs (pi, Claude Code, Codex, OpenCode; Hermes excluded)"
-  if (( DRY_RUN )); then run npm install -g "$PI_NPM_PACKAGE" @openai/codex; run brew install opencode; echo "  DRY-RUN: run the official Claude installer"; return; fi
+  log "Optional AI coding CLIs (pi, Claude Code, Codex, OpenCode, T3 Code; Hermes excluded)"
+  if (( DRY_RUN )); then
+    run npm install -g "$PI_NPM_PACKAGE" @openai/codex; run brew install opencode; echo "  DRY-RUN: run the official Claude installer"
+    run npx -y "t3@$T3_NPM_TAG" service install; return
+  fi
   eval "$(mise activate bash)"
   npm install -g "$PI_NPM_PACKAGE" @openai/codex
   brew list opencode >/dev/null 2>&1 || brew install opencode
   command -v claude >/dev/null 2>&1 || curl -fsSL https://claude.ai/install.sh | bash
+  install_t3
+}
+
+# T3 Code runs as a per-user systemd service (t3code.service) that self-updates within its channel.
+# Remote access (T3 Connect) is an authenticated step left to the checklist: npx t3@nightly connect link --headless
+install_t3() {
+  if ! (( HAS_SYSTEMD )); then warn "no systemd; skipping the T3 Code service"; return; fi
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  if npx -y "t3@$T3_NPM_TAG" service status 2>/dev/null | grep -q 'Status: installed'; then
+    if npx -y "t3@$T3_NPM_TAG" service update >/dev/null 2>&1; then ok "T3 Code service updated to the $T3_NPM_TAG channel"
+    else warn "T3 Code service update failed; run: npx t3@$T3_NPM_TAG service update"
+    fi
+  else
+    if npx -y "t3@$T3_NPM_TAG" service install; then ok "T3 Code service installed"
+    else warn "T3 Code service install failed; run: npx t3@$T3_NPM_TAG service install"
+    fi
+  fi
 }
 
 main() {

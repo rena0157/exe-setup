@@ -91,6 +91,11 @@ if [[ "$PROFILE" == full ]]; then
     for timer in brew-upgrade.timer docker-prune.timer; do
       if systemctl --user is-enabled --quiet "$timer" 2>/dev/null; then pass "$timer"; else fail "$timer" "rerun ./setup.sh"; fi
     done
+    if [[ -f "$HOME/.config/systemd/user/t3code.service" ]]; then
+      if systemctl --user is-active --quiet t3code.service; then pass "T3 Code service running"
+      else fail "T3 Code service" "run: systemctl --user restart t3code.service; tail ~/.t3/userdata/logs/boot-service.log"
+      fi
+    fi
     if systemctl --user is-enabled --quiet backup.timer 2>/dev/null; then
       pass "backup.timer enabled"
       marker="$HOME/.local/state/exe-backup/last-success"

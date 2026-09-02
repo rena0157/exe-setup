@@ -35,14 +35,14 @@ curl -fsSL https://raw.githubusercontent.com/rena0157/exe-setup/main/bootstrap.s
 
 ```text
 --profile full|core  core skips Docker/Tailscale, system tuning, timers, and SSH key creation
---with-ai            opt in to pi, Claude Code, Codex, and OpenCode (never Hermes)
+--with-ai            opt in to pi, Claude Code, Codex, OpenCode, and the T3 Code service (never Hermes)
 --no-shell-change    leave the current login shell unchanged
 --dry-run            print actions without changing the machine
 --check              run the read-only doctor
 --help               show command help
 ```
 
-Environment overrides: `GIT_NAME`, `GIT_EMAIL`, `NVIM_CONFIG_REPO`, `PI_NPM_PACKAGE`, `MISE_NODE_VERSION` (24), `MISE_GO_VERSION` (1.26), `TIMEZONE` (America/Toronto).
+Environment overrides: `GIT_NAME`, `GIT_EMAIL`, `NVIM_CONFIG_REPO`, `PI_NPM_PACKAGE`, `T3_NPM_TAG` (nightly), `MISE_NODE_VERSION` (24), `MISE_GO_VERSION` (1.26), `TIMEZONE` (America/Toronto).
 
 ## What you get
 
@@ -55,6 +55,7 @@ Environment overrides: `GIT_NAME`, `GIT_EMAIL`, `NVIM_CONFIG_REPO`, `PI_NPM_PACK
 - **Maintenance timers (full profile).** User-level systemd timers, enabled with lingering so they run while you are logged out: `brew-upgrade` weekly, `docker-prune` weekly (never touches named volumes), and `backup` nightly when restic is configured.
 - **Backups.** `backup/backup.sh` snapshots `~/src`, `~/.config`, `~/.ssh`, agent settings, and the installed system files to any restic repository, keeps 7 daily / 4 weekly / 6 monthly, and verifies a rotating slice of the repo. Configure it by copying `backup/restic-env.example` to `~/.config/restic/env` (mode 0600) and rerunning setup. Check with `systemctl --user list-timers` and `journalctl --user -u backup`.
 - **Tailscale.** Installed and enabled; `tailscale up` remains a manual, authenticated step. mosh only works over the tailnet IP because exe.dev's SSH is proxied.
+- **AI CLIs (`--with-ai`).** pi and Codex via npm, Claude Code via its installer, OpenCode via Homebrew, and T3 Code installed as the `t3code.service` user service (`npx t3@nightly service status`). T3 pins the Node binary it was installed with; after a Node upgrade run `npx t3@nightly service update`. Remote access through T3 Connect is an authenticated step in the checklist.
 
 ## Configuration and safety
 
@@ -72,6 +73,7 @@ Run setup as a regular user with sudo access, not as root. After the first run:
 4. Copy `backup/restic-env.example` to `~/.config/restic/env`, `chmod 600` it, write the repo password to `~/.config/restic/password`, and rerun `./setup.sh` to enable the nightly timer.
 5. Log out/in once so the `docker` group applies; validate with `docker run --rm hello-world`.
 6. Authenticate optional AI CLIs individually. Never store their tokens in this repository.
+7. For T3 Code remote access: `npx t3@nightly connect link --headless`, then pair a client with `npx t3@nightly pair`.
 
 On the Mac side, add the VM to `~/.ssh/config` with its tailnet name so `mosh <name>` works, and keep the exe.dev HTTPS proxy private: `https://<name>.exe.xyz` serves port 8000 and ports 3000-9999 are forwarded behind exe.dev login.
 
