@@ -5,3 +5,5 @@
 *.key
 *.pem
 .DS_Store
+.team-dev/
+__pycache__/

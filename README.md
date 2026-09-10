@@ -4,6 +4,10 @@ A one-command, idempotent bootstrap for an Ubuntu development machine, tuned for
 
 ## Create a new exe.dev dev machine
 
+For individually assigned development machines, use [the team rollout guide](TEAM-DEVELOPMENT.md).
+It keeps the existing shared pool, defaults to 4 vCPU / 8 GB / 100 GB, and uses T3 Connect
+plus private exe.dev previews without requiring Tailscale. The personal defaults below remain available.
+
 ```bash
 git clone https://github.com/rena0157/exe-setup.git ~/src/exe-setup
 cd ~/src/exe-setup

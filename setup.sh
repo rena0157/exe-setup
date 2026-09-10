@@ -7,6 +7,7 @@ DRY_RUN=0
 PROFILE=full
 CHANGE_SHELL=1
 WITH_AI=0
+TAILSCALE_MODE="${TAILSCALE_MODE:-$(cat "$HOME/.config/exe-setup/tailscale-mode" 2>/dev/null || printf required)}"
 NVIM_CONFIG_REPO="${NVIM_CONFIG_REPO-https://github.com/rena0157/lazy.nvim.git}"
 PI_NPM_PACKAGE="${PI_NPM_PACKAGE:-@earendil-works/pi-coding-agent}"
 T3_NPM_TAG="${T3_NPM_TAG:-nightly}"
@@ -30,6 +31,7 @@ Options:
   --profile full|core  full configures Docker/Tailscale, system tuning, timers, and an SSH key (default: full)
   --with-ai            install pi, Claude Code, Codex, OpenCode, and the T3 Code service (never Hermes)
   --no-shell-change    do not change the login shell
+  --tailscale MODE     required or off (off skips enrollment checks)
   --dry-run            print planned actions without changing the host
   --check              run scripts/doctor.sh only
   -h, --help           show this help
@@ -50,6 +52,7 @@ while (($#)); do
   case "$1" in
     --profile) (($# >= 2)) || die "--profile needs a value"; PROFILE=$2; shift 2 ;;
     --with-ai) WITH_AI=1; shift ;;
+    --tailscale) (($# >= 2)) || die "--tailscale needs required or off"; TAILSCALE_MODE=$2; shift 2 ;;
     --no-shell-change) CHANGE_SHELL=0; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --check) CHECK=1; shift ;;
@@ -58,6 +61,8 @@ while (($#)); do
   esac
 done
 [[ "$PROFILE" == full || "$PROFILE" == core ]] || die "profile must be 'full' or 'core'"
+[[ "$TAILSCALE_MODE" == required || "$TAILSCALE_MODE" == off ]] || die "tailscale must be required or off"
+export TAILSCALE_MODE
 if (( CHECK )); then exec "$SCRIPT_DIR/scripts/doctor.sh" --profile "$PROFILE"; fi
 if (( EUID == 0 )); then die "run setup as a regular user with sudo access, not as root"; fi
 
@@ -355,12 +360,16 @@ main() {
   install_nvim_config
   if [[ "$PROFILE" == full ]]; then
     configure_system
-    install_tailscale
+    if [[ "$TAILSCALE_MODE" == required ]]; then install_tailscale; fi
+    if ! (( DRY_RUN )); then
+      mkdir -p "$HOME/.config/exe-setup"
+      printf '%s\n' "$TAILSCALE_MODE" > "$HOME/.config/exe-setup/tailscale-mode"
+    fi
     install_ssh_key
     install_user_services
   fi
   set_shell
   install_ai
-  if (( DRY_RUN )); then ok "dry run complete; no changes made"; else "$SCRIPT_DIR/scripts/doctor.sh" --profile "$PROFILE" || warn "doctor found issues; follow its suggestions above"; fi
+  if (( DRY_RUN )); then ok "dry run complete; no changes made"; else "$SCRIPT_DIR/scripts/doctor.sh" --profile "$PROFILE"; fi
 }
 main

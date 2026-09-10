@@ -40,7 +40,7 @@ if ! git -C "\$DEST" fetch --tags origin "$REF"; then
 fi
 git -C "\$DEST" checkout --detach FETCH_HEAD
 mkdir -p "\$HOME/src"
-"\$DEST/setup.sh" --profile "$PROFILE" $WITH_AI || echo "setup.sh exited \$?"
+"\$DEST/setup.sh" --profile "$PROFILE" $WITH_AI
 echo "=== first boot finished \$(date -Is)"
 EOF
 )

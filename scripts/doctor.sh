@@ -2,6 +2,8 @@
 # Read-only installation diagnostics.
 set -u
 PROFILE=full
+TAILSCALE_MODE="${TAILSCALE_MODE:-$(cat "$HOME/.config/exe-setup/tailscale-mode" 2>/dev/null || printf required)}"
+[[ "$TAILSCALE_MODE" == required || "$TAILSCALE_MODE" == off ]] || { echo 'Invalid Tailscale mode' >&2; exit 2; }
 if [[ ${1:-} == --profile ]]; then PROFILE=${2:-}; shift 2; fi
 [[ $# == 0 && ( "$PROFILE" == full || "$PROFILE" == core ) ]] || { echo "Usage: scripts/doctor.sh [--profile full|core]" >&2; exit 2; }
 
@@ -22,7 +24,8 @@ export PATH="$HOME/.local/bin:$PATH"
 HAS_SYSTEMD=0; [[ -d /run/systemd/system ]] && HAS_SYSTEMD=1
 
 required=(brew git gh zsh nvim zellij rg fd eza bat fzf zoxide delta jq yq mise node npm go bun uv python atuin direnv lazygit shellcheck)
-[[ "$PROFILE" == full ]] && required+=(docker mosh tailscale ssh restic)
+[[ "$PROFILE" == full ]] && required+=(docker mosh ssh restic)
+[[ "$PROFILE" == full && "$TAILSCALE_MODE" == required ]] && required+=(tailscale)
 for command_name in "${required[@]}"; do
   if command -v "$command_name" >/dev/null 2>&1; then pass "$command_name"
   else fail "$command_name" "rerun ./setup.sh --profile $PROFILE"
@@ -76,7 +79,9 @@ if [[ "$PROFILE" == full ]]; then
     fi
     if [[ -f /etc/docker/daemon.json ]] && grep -q max-size /etc/docker/daemon.json; then pass "Docker log rotation"; else info "Docker log rotation not configured; rerun setup"; fi
   fi
-  if command -v tailscale >/dev/null 2>&1; then
+  if [[ "$TAILSCALE_MODE" == off ]]; then
+    info "Tailscale enrollment intentionally disabled; use T3 Connect and exe.dev SSH"
+  elif command -v tailscale >/dev/null 2>&1; then
     if tailscale status >/dev/null 2>&1; then pass "Tailscale connected ($(tailscale ip -4 2>/dev/null | head -1))"
     else fail "Tailscale" "run sudo tailscale up --ssh"
     fi
