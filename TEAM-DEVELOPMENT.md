@@ -139,8 +139,8 @@ Trial updates on the pilot and use the matching version's documented `service up
 To recover a failed first boot, fix the logged cause, then run
 `./team-dev.sh repair JW --ref <reviewed-setup-commit>` (supports `--dry-run`). It refuses
 unowned or absent VMs and running first-boot jobs. It replaces a retained failed provider
-setup script and runs the replacement through `exe-setup.service`, allowing the provider
-to retire it after success instead of retrying the old revision on reboot.
+setup script and runs the replacement through `exe-setup.service`. Successful setup
+disables that first-boot unit because the provider can restore its original script on reboot.
 It converges setup in place and updates the status marker; it does
 restart T3. Use the original SHA or a reviewed fix. Do not run create again or replace a working VM.
 

@@ -80,6 +80,7 @@ def firstboot(code, person, ref):
         'git -C "$dest" rev-parse HEAD > "$state/setup-ref"',
         '/home/linuxbrew/.linuxbrew/bin/mise exec -- node --version > "$state/node-version"',
         'mise exec -- bun --version > "$state/bun-version"',
+        'sudo systemctl disable exe-setup.service',
         'printf base-ready > "$state/install-status"',
         'printf "Base ready; complete developer sign-ins and validation.\\n"',
     ]) + "\n"
@@ -93,8 +94,8 @@ def assert_owned(vm, vms):
 
 
 def repair_script(script):
-    # Failed provider setup is retried at boot until its systemd unit succeeds.
-    # Run the replacement through that unit so ExecStartPost retires it too.
+    # Provider setup can be restored at boot. Retire the file through the unit,
+    # and disable future boot runs only after the replacement succeeds.
     return "\n".join([
         "set -Eeuo pipefail", "umask 077",
         'status=$(systemctl show exe-setup.service -p ActiveState --value)',
@@ -106,6 +107,7 @@ def repair_script(script):
         'if sudo test -f /exe.dev/setup; then sudo cat /exe.dev/setup > "$HOME/.local/state/team-dev/setup.before-repair"; fi',
         'sudo install -m 0700 -o "$(id -u)" -g "$(id -g)" "$tmp" /exe.dev/setup',
         'sudo systemctl restart exe-setup.service',
+        'sudo systemctl disable exe-setup.service',
         'test ! -e /exe.dev/setup',
         'test "$(cat "$HOME/.local/state/team-dev/install-status")" = base-ready',
     ]) + "\n"
