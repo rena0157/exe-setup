@@ -75,6 +75,17 @@ class TeamDevTest(unittest.TestCase):
                 team.main()
             run.assert_not_called()
 
+    def test_repair_refuses_to_interrupt_running_provider_setup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = team.repair_script('echo repaired\n')
+            subprocess.run(['bash', '-n'], input=script, text=True, check=True)
+            result = subprocess.run(['bash'], input='systemctl() { echo activating; }\n' + script,
+                                    text=True, capture_output=True,
+                                    env={'HOME': directory, 'PATH': '/usr/bin:/bin'})
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('still running', result.stderr)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
 
 if __name__ == '__main__':
     unittest.main()

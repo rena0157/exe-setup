@@ -92,6 +92,25 @@ def assert_owned(vm, vms):
     return match
 
 
+def repair_script(script):
+    # Failed provider setup is retried at boot until its systemd unit succeeds.
+    # Run the replacement through that unit so ExecStartPost retires it too.
+    return "\n".join([
+        "set -Eeuo pipefail", "umask 077",
+        'status=$(systemctl show exe-setup.service -p ActiveState --value)',
+        'case "$status" in active|activating|deactivating) echo "Provider setup is still running; retry later" >&2; exit 1;; esac',
+        'tmp=$(mktemp)',
+        "trap 'rm -f \"$tmp\"' EXIT",
+        "printf '%s' " + shlex.quote(script) + ' > "$tmp"',
+        'mkdir -p "$HOME/.local/state/team-dev"',
+        'if sudo test -f /exe.dev/setup; then sudo cat /exe.dev/setup > "$HOME/.local/state/team-dev/setup.before-repair"; fi',
+        'sudo install -m 0700 -o "$(id -u)" -g "$(id -g)" "$tmp" /exe.dev/setup',
+        'sudo systemctl restart exe-setup.service',
+        'test ! -e /exe.dev/setup',
+        'test "$(cat "$HOME/.local/state/team-dev/install-status")" = base-ready',
+    ]) + "\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--roster", type=Path, default=ROOT / ".team-dev/roster.json")
@@ -116,6 +135,8 @@ def main():
         script = firstboot(args.code, person, args.ref)
         if len(script.encode()) > 10240:
             raise ValueError("First-boot script exceeds exe.dev's 10 KiB limit")
+        if args.command == "repair":
+            script = repair_script(script)
         vm = f"dev-{args.code.lower()}"
         command = ["ssh", "exe.dev", "new", "--name", vm, "--image", "ghcr.io/boldsoftware/exeuntu",
                    "--cpu", "4", "--memory", "8GB", "--disk", "100GB", "--tag", "team-dev",
