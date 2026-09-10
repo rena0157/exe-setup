@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CODES = ("JW", "LP", "MM", "DL")
 REPO = "https://github.com/rena0157/exe-setup.git"
 T3_VERSION = "0.0.41-nightly.20260910.1486"
+BUN_VERSION = "1.4.0"
 
 
 def run(argv, **kwargs):
@@ -60,6 +61,7 @@ def firstboot(code, person, ref):
         'state="$HOME/.local/state/team-dev"',
         "trap 'printf failed > \"$state/install-status\"' ERR",
         'printf installing > "$state/install-status"',
+        'rm -f "$state/acceptance.json"',
         'dest="$HOME/.local/share/exe-setup"',
         'if [[ ! -d "$dest/.git" ]]; then git clone ' + shlex.quote(REPO) + ' "$dest"; fi',
         'git -C "$dest" fetch origin ' + ref,
@@ -68,6 +70,8 @@ def firstboot(code, person, ref):
         "export TAILSCALE_MODE=off MISE_NODE_VERSION=24.20.0 T3_NPM_TAG=" + shlex.quote(T3_VERSION),
         '"$dest/setup.sh" --profile full --with-ai --tailscale off',
         'export PATH="/home/linuxbrew/.linuxbrew/bin:$HOME/.local/bin:$PATH"',
+        'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"',
+        'mise use --global bun@' + BUN_VERSION,
         'install -m 0755 "$dest/scripts/exe-t3.sh" "$HOME/.local/bin/exe-t3"',
         'for bin in codex claude cloudflared; do /home/linuxbrew/.linuxbrew/bin/mise exec -- which "$bin"; done',
         'systemctl --user is-enabled --quiet t3code.service',
@@ -75,7 +79,7 @@ def firstboot(code, person, ref):
         '"$dest/scripts/doctor.sh" --profile full',
         'git -C "$dest" rev-parse HEAD > "$state/setup-ref"',
         '/home/linuxbrew/.linuxbrew/bin/mise exec -- node --version > "$state/node-version"',
-        '/home/linuxbrew/.linuxbrew/bin/bun --version > "$state/bun-version"',
+        'mise exec -- bun --version > "$state/bun-version"',
         'printf base-ready > "$state/install-status"',
         'printf "Base ready; complete developer sign-ins and validation.\\n"',
     ]) + "\n"
@@ -96,6 +100,10 @@ def main():
     create.add_argument("code", choices=CODES)
     create.add_argument("--ref", required=True)
     create.add_argument("--dry-run", action="store_true")
+    repair = commands.add_parser("repair", help="Rerun pinned setup in place; restarts the assigned VM's T3 service")
+    repair.add_argument("code", choices=CODES)
+    repair.add_argument("--ref", required=True)
+    repair.add_argument("--dry-run", action="store_true")
     onboard = commands.add_parser("onboard", help="Resume one explicit onboarding step")
     onboard.add_argument("code", choices=CODES)
     onboard.add_argument("--step", choices=("identity", "connect", "project", "verify"), default="identity")
@@ -103,8 +111,8 @@ def main():
     status = commands.add_parser("status", help="Read live installation, service, and access status")
     status.add_argument("code", choices=CODES, nargs="?")
     args = parser.parse_args()
-    if args.command == "create":
-        person = roster_entry(args.roster, args.code)
+    if args.command in ("create", "repair"):
+        person = roster_entry(args.roster, args.code, required=args.command == "repair")
         script = firstboot(args.code, person, args.ref)
         if len(script.encode()) > 10240:
             raise ValueError("First-boot script exceeds exe.dev's 10 KiB limit")
@@ -113,8 +121,13 @@ def main():
                    "--cpu", "4", "--memory", "8GB", "--disk", "100GB", "--tag", "team-dev",
                    "--no-email", "--json", "--setup-script", "/dev/stdin"]
         if args.dry_run:
-            print(shlex.join(command))
+            print(shlex.join(command if args.command == "create" else ["ssh", f"{vm}.exe.xyz", "bash", "-s"]))
             print(script)
+            return
+        if args.command == "repair":
+            assert_owned(vm, inventory())
+            remote(vm, script)
+            print(f"Repaired {vm}; run status and repeat acceptance checks.")
             return
         if any(item["vm_name"] == vm for item in inventory()):
             raise ValueError(f"{vm} already exists; refusing to modify or replace it")
@@ -149,7 +162,7 @@ def main():
         print(shlex.join(["ssh", "exe.dev", "share", "add", vm, person["email"]]))
         return
     if args.step == "connect":
-        command = '$HOME/.local/bin/exe-t3 connect && systemctl --user restart t3code.service'
+        command = 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; $HOME/.local/bin/exe-t3 connect && systemctl --user restart t3code.service'
     elif args.step == "project":
         if args.app_ref and not re.fullmatch(r"[0-9a-f]{40}", args.app_ref):
             raise ValueError("--app-ref must be a full commit SHA")

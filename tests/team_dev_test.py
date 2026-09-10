@@ -66,6 +66,15 @@ class TeamDevTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 team.roster_entry(Path(directory)/'missing', 'JW', required=True)
 
+    def test_repair_requires_an_existing_administered_machine(self):
+        with patch('sys.argv', ['team-dev', 'repair', 'JW', '--ref', 'a'*40]), \
+             patch.object(team, 'roster_entry', return_value={'name':'James', 'email':'jw@example.test'}), \
+             patch.object(team, 'inventory', return_value=[]), \
+             patch.object(team, 'run') as run:
+            with self.assertRaisesRegex(ValueError, 'administrator access'):
+                team.main()
+            run.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

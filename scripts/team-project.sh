@@ -24,7 +24,12 @@ cd "$repo"
 branch=$(git branch --show-current)
 [[ -n "$branch" && "$branch" != main ]] || { echo 'Select a feature branch before onboarding' >&2; exit 1; }
 expected=$(jq -r '.packageManager | sub("^bun@"; "")' package.json)
-[[ $(bun --version) == "$expected" ]] || { echo "Install Bun $expected before continuing" >&2; exit 1; }
+[[ "$expected" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected an exact Bun version in packageManager' >&2; exit 1; }
+if [[ $(bun --version) != "$expected" ]]; then
+  mise use --global "bun@$expected"
+  eval "$(mise activate bash)"
+fi
+[[ $(bun --version) == "$expected" ]] || { echo "Bun $expected is not active" >&2; exit 1; }
 bun install --frozen-lockfile
 bun run env init
 python3 - <<'PY'

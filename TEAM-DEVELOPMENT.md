@@ -32,7 +32,7 @@ Push the tested setup commit so new VMs can fetch it, then use its full SHA:
 
 Dry-run is completely offline. Creation refuses an existing name; it does not resize,
 delete, or overwrite anything. First boot installs the normal full development profile,
-Node 24.20.0 and the pinned T3 version declared in `scripts/team_dev.py`. Tailscale
+Node 24.20.0, Bun 1.4.0 via mise, and the pinned T3 version declared in `scripts/team_dev.py`. Tailscale
 enrollment is disabled. The T3 service uses lingering and retains the Homebrew PATH fix.
 No developer credentials are provisioned. The exe.dev proxy stays private on port 3000.
 
@@ -75,7 +75,7 @@ bash ~/.local/share/exe-setup/scripts/team-project.sh <40-character-app-commit>
 
 Use an app commit containing `bun run dev exe`. Once merged, omit `--app-ref` to clone main
 and immediately create a feature branch. A partial clone left on main must be switched to
-a feature branch before rerunning; existing work is never reset. Bun must match packageManager.
+a feature branch before rerunning; existing work is never reset. Project setup uses mise to match Bun to packageManager.
 
 The helper checks GitHub login, clones app.caivanos, creates a unique onboarding branch,
 installs locked dependencies, and runs `env init`. Each developer needs access to the existing
@@ -135,10 +135,10 @@ Admin shell: `ssh dev-jw.exe.xyz`. T3 control: `exe-t3 service status`,
 The `exe-t3` wrapper executes the active installed version without fetching another CLI.
 Trial updates on the pilot and use the matching version's documented `service update`.
 
-To recover a failed first boot, fix the logged cause, then rerun the same first-boot script
-rendered by `create --dry-run` over SSH (omit its first printed command line). This converges
-setup in place and updates the status marker; it does restart T3. Do not run create again or
-replace a working VM. Keep the original reviewed SHA.
+To recover a failed first boot, fix the logged cause, then run
+`./team-dev.sh repair JW --ref <reviewed-setup-commit>` (supports `--dry-run`). It refuses
+unowned or absent VMs, converges setup in place, and updates the status marker; it does
+restart T3. Use the original SHA or a reviewed fix. Do not run create again or replace a working VM.
 
 Rebuild from provisioning and pushed branches. Restic is installed but backups are disabled;
 unpushed files and T3 history have no automated recovery guarantee. Preserve them explicitly

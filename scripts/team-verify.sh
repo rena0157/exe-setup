@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export PATH="/home/linuxbrew/.linuxbrew/bin:$HOME/.local/bin:$PATH"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 eval "$(mise activate bash)"
 "$HOME/.local/share/exe-setup/scripts/doctor.sh" --profile full
 systemctl --user is-active --quiet t3code.service

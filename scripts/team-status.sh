@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 state="$HOME/.local/state/team-dev"
 printf '  Installation: %s\n' "$(cat "$state/install-status" 2>/dev/null || printf unknown)"
 if [[ $(cat "$state/install-status" 2>/dev/null) != base-ready ]]; then exit 0; fi
