@@ -51,7 +51,8 @@ The first step applies the verified Git identity and prints the exact named web-
 command. Execute that command to grant Web access; it may send an email invitation.
 Keep the developer outside the exe.dev team and do not use `--root` or public sharing.
 
-For Connect, have the assigned developer present. They open the CLI's authorization
+For Connect, have the assigned developer present. The helper runs `exe-t3 connect link --headless`.
+They open the CLI's authorization
 URL and sign in to their own T3 account; enter the returned code in the same CLI session.
 The helper restarts T3 after successful linking. Sign in to that same account in T3 Code
 and select the new environment. The administrator does not link the VM to their own T3 account.

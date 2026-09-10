@@ -162,7 +162,7 @@ def main():
         print(shlex.join(["ssh", "exe.dev", "share", "add", vm, person["email"]]))
         return
     if args.step == "connect":
-        command = 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; $HOME/.local/bin/exe-t3 connect && systemctl --user restart t3code.service'
+        command = 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; $HOME/.local/bin/exe-t3 connect link --headless && systemctl --user restart t3code.service'
     elif args.step == "project":
         if args.app_ref and not re.fullmatch(r"[0-9a-f]{40}", args.app_ref):
             raise ValueError("--app-ref must be a full commit SHA")
